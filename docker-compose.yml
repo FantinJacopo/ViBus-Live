@@ -1,0 +1,81 @@
+services:
+  # Node-RED - Orchestrazione flussi
+  nodered:
+    image: nodered/node-red:latest
+    container_name: svt-nodered
+    ports:
+      - "1880:1880"
+    volumes:
+      - nodered_data:/data
+    environment:
+      - TZ=Europe/Rome
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # Mosquitto MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: svt-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+      - ./mosquitto/config:/mosquitto/config
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # InfluxDB 2.x - Database time-series
+  influxdb:
+    image: influxdb:2.6
+    container_name: svt-influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=svt-password-123
+      - DOCKER_INFLUXDB_INIT_ORG=SVT-Vicenza
+      - DOCKER_INFLUXDB_INIT_BUCKET=bus-data
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=svt-super-secret-token-123456789
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # Grafana - Dashboard e visualizzazione
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: svt-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - grafana_provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=svt-admin-123
+      - GF_INSTALL_PLUGINS=grafana-worldmap-panel,grafana-piechart-panel
+    networks:
+      - iot-network
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+
+networks:
+  iot-network:
+    driver: bridge
+
+volumes:
+  nodered_data:
+  mosquitto_data:
+  mosquitto_logs:
+  influxdb_data:
+  influxdb_config:
+  grafana_data:
+  grafana_provisioning:
