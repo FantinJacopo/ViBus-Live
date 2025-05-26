@@ -1,0 +1,344 @@
+[
+    {
+        "id": "e660c6e1541baa8b",
+        "type": "tab",
+        "label": "ViBus Simulator",
+        "disabled": false,
+        "info": "Simulatore autobus SVT Vicenza"
+    },
+    {
+        "id": "098860802d519e98",
+        "type": "inject",
+        "z": "e660c6e1541baa8b",
+        "name": "Avvia Simulazione",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "10",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 180,
+        "wires": [
+            [
+                "48108a0ede779c4a"
+            ]
+        ]
+    },
+    {
+        "id": "48108a0ede779c4a",
+        "type": "function",
+        "z": "e660c6e1541baa8b",
+        "name": "Simula Autobus SVT",
+        "func": "const lines = [{id: \"1\", name: \"Stanga-Ospedale\", color: \"#FF6B35\"}, {id: \"2\", name: \"Anconetta-Ferrovieri\", color: \"#004E89\"}, {id: \"3\", name: \"Maddalene-Cattane\", color: \"#00A8CC\"}, {id: \"5\", name: \"Villaggio-Centro\", color: \"#7209B7\"}, {id: \"7\", name: \"Laghetto-Stadio\", color: \"#FF8500\"}]; const vicenzaCenter = { lat: 45.5477, lon: 11.5458 }; if (!flow.get(\"buses\")) { const buses = []; lines.forEach(line => { for (let i = 1; i <= 2; i++) { buses.push({ id: `SVT${line.id}${String(i).padStart(2, '0')}`, line: line.id, lineName: line.name, lat: vicenzaCenter.lat + (Math.random() - 0.5) * 0.02, lon: vicenzaCenter.lon + (Math.random() - 0.5) * 0.02, speed: 25 + Math.random() * 15, bearing: Math.random() * 360, delay: Math.floor(Math.random() * 8) - 2, passengers: Math.floor(Math.random() * 40), status: \"in_service\", lastUpdate: new Date() }); } }); flow.set(\"buses\", buses); } const buses = flow.get(\"buses\"); const updatedBuses = buses.map(bus => { const moveDistance = 0.0005; const bearing = bus.bearing + (Math.random() - 0.5) * 30; const newLat = bus.lat + moveDistance * Math.cos(bearing * Math.PI / 180); const newLon = bus.lon + moveDistance * Math.sin(bearing * Math.PI / 180); const lat = Math.max(45.52, Math.min(45.57, newLat)); const lon = Math.max(11.52, Math.min(11.57, newLon)); return { ...bus, lat: lat, lon: lon, bearing: bearing, speed: Math.max(5, Math.min(50, bus.speed + (Math.random() - 0.5) * 5)), delay: bus.delay + (Math.random() - 0.5) * 0.5, passengers: Math.max(0, Math.min(50, bus.passengers + Math.floor((Math.random() - 0.5) * 6))), lastUpdate: new Date() }; }); flow.set(\"buses\", updatedBuses); const messages = []; updatedBuses.forEach(bus => { messages.push({ payload: JSON.stringify({ bus_id: bus.id, line: bus.line, line_name: bus.lineName, position: { lat: bus.lat, lon: bus.lon }, speed: Math.round(bus.speed * 10) / 10, bearing: Math.round(bus.bearing), delay: Math.round(bus.delay * 10) / 10, passengers: bus.passengers, status: bus.status, timestamp: bus.lastUpdate.toISOString() }), topic: `vibus/autobus/${bus.id}/posizione` }); }); return [messages];",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 360,
+        "y": 180,
+        "wires": [
+            [
+                "029abb3813f214ab"
+            ]
+        ]
+    },
+    {
+        "id": "029abb3813f214ab",
+        "type": "split",
+        "z": "e660c6e1541baa8b",
+        "name": "Split Autobus",
+        "splt": "\\n",
+        "spltType": "str",
+        "arraySplt": 1,
+        "arraySpltType": "len",
+        "stream": false,
+        "addname": "",
+        "property": "payload",
+        "x": 550,
+        "y": 180,
+        "wires": [
+            [
+                "b0d7992e3854de76"
+            ]
+        ]
+    },
+    {
+        "id": "b0d7992e3854de76",
+        "type": "function",
+        "z": "e660c6e1541baa8b",
+        "name": "Formatta JSON",
+        "func": "msg.payload = JSON.stringify(msg.payload); return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 740,
+        "y": 180,
+        "wires": [
+            [
+                "607c8cbfeec821ea",
+                "e8d09695a4d4a2f0"
+            ]
+        ]
+    },
+    {
+        "id": "607c8cbfeec821ea",
+        "type": "mqtt out",
+        "z": "e660c6e1541baa8b",
+        "name": "Pubblica MQTT",
+        "topic": "",
+        "qos": "1",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqtt_broker",
+        "x": 950,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "e8d09695a4d4a2f0",
+        "type": "debug",
+        "z": "e660c6e1541baa8b",
+        "name": "Debug Autobus",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 940,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "b401bf32f96173da",
+        "type": "tab",
+        "label": "MQTT to InfluxDB",
+        "disabled": false,
+        "info": "Pipeline dati da MQTT a InfluxDB"
+    },
+    {
+        "id": "25a02ee265408414",
+        "type": "mqtt in",
+        "z": "b401bf32f96173da",
+        "name": "Ricevi Dati Autobus",
+        "topic": "vibus/autobus/+/posizione",
+        "qos": "1",
+        "datatype": "auto-detect",
+        "broker": "mqtt_broker_influx",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 100,
+        "wires": [
+            [
+                "8d3c6b9201078891"
+            ]
+        ]
+    },
+    {
+        "id": "8d3c6b9201078891",
+        "type": "function",
+        "z": "b401bf32f96173da",
+        "name": "Parse JSON",
+        "func": "try { if (typeof msg.payload === 'string') { msg.payload = JSON.parse(msg.payload); } return msg; } catch (e) { node.error('Errore parsing JSON: ' + e.message, msg); return null; }",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 100,
+        "wires": [
+            [
+                "6009ba6b92f1d7fb"
+            ]
+        ]
+    },
+    {
+        "id": "6009ba6b92f1d7fb",
+        "type": "function",
+        "z": "b401bf32f96173da",
+        "name": "Processa Dati Autobus",
+        "func": "try { \n    const data = msg.payload; \n    \n    if (!data || !data.position) { \n        node.error('Dati mancanti nel payload', msg); \n        return null; \n    } \n    \n    // Timestamp in nanoseconds\n    const timestamp = Math.floor(Date.now() * 1000000);\n    \n    // Line Protocol corretto per InfluxDB\n    const lineProtocol = `bus_positions,bus_id=${data.bus_id},line=${data.line},status=${data.status} latitude=${data.position.lat},longitude=${data.position.lon},speed=${data.speed},bearing=${data.bearing},delay=${data.delay},passengers=${data.passengers}i ${timestamp}`;\n    \n    msg.payload = lineProtocol;\n    msg.headers = {\n        'Authorization': 'Token svt-super-secret-token-123456789',\n        'Content-Type': 'text/plain; charset=utf-8'\n    };\n    \n    return msg; \n} catch (e) { \n    node.error('Errore processing: ' + e.message, msg); \n    return null; \n}",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 530,
+        "y": 100,
+        "wires": [
+            [
+                "74c6c2eb2f43e7c3"
+            ]
+        ]
+    },
+    {
+        "id": "c7d2b8e2013f2e98",
+        "type": "inject",
+        "z": "b401bf32f96173da",
+        "name": "Genera Statistiche",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "60",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 170,
+        "y": 200,
+        "wires": [
+            [
+                "131351fc44c6a4be"
+            ]
+        ]
+    },
+    {
+        "id": "131351fc44c6a4be",
+        "type": "function",
+        "z": "b401bf32f96173da",
+        "name": "Calcola Statistiche Linea",
+        "func": "const lines = [\"1\", \"2\", \"3\", \"5\", \"7\"]; const now = new Date(); const timestamp = now.getTime() * 1000000; const stats = lines.map(line => { const avgDelay = (Math.random() - 0.3) * 5; const maxDelay = avgDelay + Math.random() * 10; const onTimePercentage = Math.max(60, 100 - Math.abs(avgDelay) * 15); const activeBuses = Math.floor(Math.random() * 3) + 1; return { measurement: 'line_stats', tags: { line: line, day_type: now.getDay() === 0 || now.getDay() === 6 ? 'weekend' : 'weekday' }, fields: { avg_delay: Math.round(avgDelay * 10) / 10, max_delay: Math.round(maxDelay * 10) / 10, on_time_percentage: Math.round(onTimePercentage * 10) / 10, active_buses: activeBuses }, timestamp: timestamp }; }); return stats.map(stat => ({ payload: stat, topic: `vibus/linea/${stat.tags.line}/statistiche`, statData: stat }));",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 200,
+        "wires": [
+            [
+                "9b0f43866de1f93d"
+            ]
+        ]
+    },
+    {
+        "id": "9b0f43866de1f93d",
+        "type": "split",
+        "z": "b401bf32f96173da",
+        "name": "Split Statistiche",
+        "splt": "\\n",
+        "spltType": "str",
+        "arraySplt": 1,
+        "arraySpltType": "len",
+        "stream": false,
+        "addname": "",
+        "x": 650,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "74c6c2eb2f43e7c3",
+        "type": "http request",
+        "z": "b401bf32f96173da",
+        "name": "InfluxDB HTTP",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://influxdb:8086/api/v2/write?org=SVT-Vicenza&bucket=bus-data&precision=ns",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 780,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "mqtt_broker",
+        "type": "mqtt-broker",
+        "name": "Mosquitto Local",
+        "broker": "mosquitto",
+        "port": "1883",
+        "clientid": "nodered_simulator",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "vibus/sistema/nodered/stato",
+        "birthQos": "1",
+        "birthRetain": "true",
+        "birthPayload": "online",
+        "birthMsg": {},
+        "closeTopic": "vibus/sistema/nodered/stato",
+        "closeQos": "1",
+        "closeRetain": "true",
+        "closePayload": "offline",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "mqtt_broker_influx",
+        "type": "mqtt-broker",
+        "name": "Mosquitto Local",
+        "broker": "mosquitto",
+        "port": "1883",
+        "clientid": "nodered_influx",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]
