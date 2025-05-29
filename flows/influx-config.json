@@ -1,0 +1,12 @@
+{
+  "id": "influx_http_config",
+  "type": "function",
+  "name": "Configura InfluxDB HTTP",
+  "func": "// Configurazione per scrivere dati su InfluxDB\n// Supporta sia connessione locale che tramite ngrok\n\nconst INFLUX_CONFIG = {\n    // URL locale (all'interno di Docker)\n    local: 'http://influxdb:8086',\n    \n    // URL pubblico tramite ngrok (per test esterni)\n    public: 'https://more-elk-slightly.ngrok-free.app',\n    \n    // Credenziali\n    token: 'svt-super-secret-token-123456789',\n    org: 'SVT-Vicenza',\n    bucket: 'bus-data',\n    \n    // Headers comuni\n    headers: {\n        'Authorization': 'Token svt-super-secret-token-123456789',\n        'Content-Type': 'text/plain; charset=utf-8'\n    }\n};\n\n// Usa URL locale per Node-RED (più veloce)\nconst baseUrl = INFLUX_CONFIG.local;\n\n// Costruisci URL completo per la scrittura\nconst writeUrl = `${baseUrl}/api/v2/write?org=${INFLUX_CONFIG.org}&bucket=${INFLUX_CONFIG.bucket}&precision=ns`;\n\n// Imposta configurazione nel messaggio\nmsg.url = writeUrl;\nmsg.headers = INFLUX_CONFIG.headers;\n\n// Salva configurazione nel flow context per riutilizzo\nflow.set('influx_config', INFLUX_CONFIG);\n\nreturn msg;",
+  "outputs": 1,
+  "timeout": 0,
+  "noerr": 0,
+  "initialize": "",
+  "finalize": "",
+  "libs": []
+}
