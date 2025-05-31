@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViBus MQTT Test - Web Client</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .connecting { background-color: #fff3cd; color: #856404; }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        .message-item {
+            background-color: #e9ecef;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚌 ViBus MQTT Test Client</h1>
+        
+        <div class="status" id="status">⏳ Non connesso</div>
+        
+        <h3>📡 Configurazione Connessione</h3>
+        <p><strong>Host:</strong> mqtt.more-elk-slightly.ngrok-free.app</p>
+        <p><strong>Porta:</strong> 1883</p>
+        <p><strong>Protocollo:</strong> MQTT v3.1.1</p>
+        
+        <div>
+            <button id="connectBtn" onclick="connectMQTT()">🔌 Connetti</button>
+            <button id="disconnectBtn" onclick="disconnectMQTT()" disabled>❌ Disconnetti</button>
+            <button onclick="clearLog()">🗑️ Pulisci Log</button>
+        </div>
+        
+        <h3>📨 Test Messaggio</h3>
+        <input type="text" id="testTopic" placeholder="Topic (es: test/vibus)" value="test/vibus">
+        <input type="text" id="testMessage" placeholder="Messaggio" value='{"test": "web-client", "timestamp": "now"}'>
+        <button id="sendBtn" onclick="sendTestMessage()" disabled>📤 Invia Messaggio</button>
+        
+        <h3>🚌 Subscription Autobus ViBus</h3>
+        <button id="subscribeBtn" onclick="subscribeToViBus()" disabled>👂 Ascolta Autobus</button>
+        <button id="unsubscribeBtn" onclick="unsubscribeFromViBus()" disabled>🔇 Stop Ascolto</button>
+        
+        <h3>📋 Log Eventi</h3>
+        <div class="log" id="log"></div>
+        
+        <h3>📊 Statistiche</h3>
+        <p>Messaggi ricevuti: <span id="msgCount">0</span></p>
+        <p>Ultimo messaggio: <span id="lastMsg">Nessuno</span></p>
+    </div>
+
+    <script>
+        let client = null;
+        let messageCount = 0;
+        let isSubscribed = false;
+        
+        const MQTT_HOST = 'mqtt.more-elk-slightly.ngrok-free.app';
+        const MQTT_PORT = 1883;
+        const VIBUS_TOPIC = 'vibus/autobus/+/posizione';
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div class="message-item">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(status, className) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = status;
+            statusDiv.className = `status ${className}`;
+        }
+        
+        function connectMQTT() {
+            updateStatus('🔄 Connessione in corso...', 'connecting');
+            log(`Tentativo di connessione a ${MQTT_HOST}:${MQTT_PORT}`);
+            
+            try {
+                // Usa WebSocket per MQTT (molti browser bloccano TCP diretto)
+                client = mqtt.connect(`ws://${MQTT_HOST}:9001`, {
+                    clientId: 'vibus_web_test_' + Math.random().toString(16).substr(2, 8),
+                    keepalive: 60,
+                    connectTimeout: 30000,
+                    reconnectPeriod: 0 // Disabilita riconnessione automatica per test
+                });
+                
+                client.on('connect', function() {
+                    updateStatus('✅ Connesso!', 'connected');
+                    log('✅ Connessione MQTT riuscita!');
+                    
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    document.getElementById('sendBtn').disabled = false;
+                    document.getElementById('subscribeBtn').disabled = false;
+                });
+                
+                client.on('error', function(error) {
+                    updateStatus(`❌ Errore: ${error.message}`, 'disconnected');
+                    log(`❌ Errore MQTT: ${error.message}`);
+                });
+                
+                client.on('offline', function() {
+                    updateStatus('📴 Offline', 'disconnected');
+                    log('📴 Client MQTT offline');
+                });
+                
+                client.on('message', function(topic, message) {
+                    messageCount++;
+                    const msgStr = message.toString();
+                    log(`📨 Ricevuto da ${topic}: ${msgStr.substring(0, 100)}${msgStr.length > 100 ? '...' : ''}`);
+                    
+                    document.getElementById('msgCount').textContent = messageCount;
+                    document.getElementById('lastMsg').textContent = new Date().toLocaleTimeString();
+                    
+                    // Prova a parsare JSON per autobus
+                    try {
+                        const data = JSON.parse(msgStr);
+                        if (data.bus_id) {
+                            log(`🚌 Autobus ${data.bus_id} - Linea ${data.line} - Posizione: ${data.position.lat}, ${data.position.lon}`);
+                        }
+                    } catch(e) {
+                        // Non è JSON valido, ignora
+                    }
+                });
+                
+            } catch (error) {
+                updateStatus(`❌ Errore connessione: ${error.message}`, 'disconnected');
+                log(`❌ Errore nella creazione del client: ${error.message}`);
+            }
+        }
+        
+        function disconnectMQTT() {
+            if (client) {
+                client.end();
+                client = null;
+            }
+            
+            updateStatus('⭕ Disconnesso', 'disconnected');
+            log('⭕ Disconnesso da MQTT');
+            
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('subscribeBtn').disabled = true;
+            document.getElementById('unsubscribeBtn').disabled = true;
+            
+            isSubscribed = false;
+        }
+        
+        function sendTestMessage() {
+            if (!client) return;
+            
+            const topic = document.getElementById('testTopic').value;
+            const message = document.getElementById('testMessage').value;
+            
+            try {
+                client.publish(topic, message);
+                log(`📤 Messaggio inviato a ${topic}: ${message}`);
+            } catch (error) {
+                log(`❌ Errore invio: ${error.message}`);
+            }
+        }
+        
+        function subscribeToViBus() {
+            if (!client || isSubscribed) return;
+            
+            client.subscribe(VIBUS_TOPIC, function(err) {
+                if (err) {
+                    log(`❌ Errore subscription: ${err.message}`);
+                } else {
+                    log(`👂 Sottoscritto a ${VIBUS_TOPIC}`);
+                    isSubscribed = true;
+                    document.getElementById('subscribeBtn').disabled = true;
+                    document.getElementById('unsubscribeBtn').disabled = false;
+                }
+            });
+        }
+        
+        function unsubscribeFromViBus() {
+            if (!client || !isSubscribed) return;
+            
+            client.unsubscribe(VIBUS_TOPIC, function(err) {
+                if (err) {
+                    log(`❌ Errore unsubscribe: ${err.message}`);
+                } else {
+                    log(`🔇 Unsubscribe da ${VIBUS_TOPIC}`);
+                    isSubscribed = false;
+                    document.getElementById('subscribeBtn').disabled = false;
+                    document.getElementById('unsubscribeBtn').disabled = true;
+                }
+            });
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            messageCount = 0;
+            document.getElementById('msgCount').textContent = '0';
+            document.getElementById('lastMsg').textContent = 'Nessuno';
+        }
+        
+        // Log iniziale
+        log('🌐 Web client MQTT caricato. Clicca "Connetti" per iniziare.');
+        log(`📡 Target: ${MQTT_HOST}:9001 (WebSocket) o ${MQTT_HOST}:${MQTT_PORT} (TCP)`);
+    </script>
+</body>
+</html>
